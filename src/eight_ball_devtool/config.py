@@ -30,8 +30,26 @@ class Config:
     world_yaw: float = 0
     calibration: list[list[float]] = field(default_factory=list)
     calibration_image_id: str = ''
+    cue_speed: float = 1.5
+    cue_side_spin: float = 0
+    cue_top_spin: float = 0
+    sliding_friction: float = 0.2
+    rolling_friction: float = 0.01
+    ball_restitution: float = 0.95
+    cushion_restitution: float = 0.85
+    # pooltool defaults, not measured Chinese-table pocket geometry.
+    corner_pocket_width: float = 118
+    side_pocket_width: float = 137
+    trajectory_dt: float = 0.02
 
     def validate(self):
+        physics_ranges = [('cue_speed', .2, 5), ('cue_side_spin', -.8, .8), ('cue_top_spin', -.8, .8), ('sliding_friction', .01, 1), ('rolling_friction', .001, .2), ('ball_restitution', .1, 1), ('cushion_restitution', .1, 1), ('corner_pocket_width', 60, 180), ('side_pocket_width', 60, 200), ('trajectory_dt', .005, .1)]
+        for name, low, high in physics_ranges:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not low <= value <= high:
+                raise ValueError(f'{name} 需要在 {low}–{high} 范围内')
+        if self.cue_side_spin**2+self.cue_top_spin**2 > .8**2+1e-9:
+            raise ValueError('侧塞与高低杆的合成偏移不能超过 0.8 个球半径')
         if not isinstance(self.calibration_image_id, str):
             raise ValueError('calibration_image_id 必须为字符串')
         if self.mode not in ('2d', '3d'):

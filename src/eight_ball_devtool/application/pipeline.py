@@ -1,12 +1,15 @@
 """Application orchestration and persistence; no UI dependencies."""
 from time import perf_counter
-from dataclasses import replace
+from dataclasses import asdict, replace
+from copy import deepcopy
+import json
 from ..acquisition import DemoSource, ImageSource
 from ..config import Config, DEFAULT_CONFIG
 from ..coordinates import map_detections
 from ..perception import DemoDetector
 from ..perception.opencv import OpenCVCandidateDetector
 from ..computation import plan
+from ..computation.physics import PooltoolEngine
 from ..fusion import fuse
 from ..models import Detection, Result
 
@@ -36,6 +39,31 @@ class Controller:
         self._image_detections = None
         self._detector_message = ''
         self.result = None
+        self.physics_engine = PooltoolEngine()
+        self._physics_cache = None
+        self._physics_cache_key = None
+
+    @staticmethod
+    def physics_key(balls, shots, config):
+        return balls, shots, json.dumps(asdict(config), sort_keys=True)
+
+    def physics_request(self):
+        if self.result is None or not self.result.shots:
+            raise ValueError('请先完成标定和球号确认，生成几何候选路线')
+        config = deepcopy(self.config)
+        balls, shots = self.result.balls, self.result.shots
+        return self.physics_key(balls, shots, config), balls, shots, config
+
+    def calculate_physics(self, request):
+        key, balls, shots, config = request
+        return key, self.physics_engine.evaluate(balls, shots, config)
+
+    def accept_physics(self, key, evaluation):
+        if self.result is None or key != self.physics_key(self.result.balls, self.result.shots, self.config):
+            return False
+        self._physics_cache_key, self._physics_cache = key, evaluation
+        self.result = replace(self.result, physics=evaluation)
+        return True
 
     def prepare_image(self, path):
         """Decode and detect off the UI thread without changing the live session."""
@@ -136,7 +164,8 @@ class Controller:
             message = message or ('未找到候选球，可在采集画面右键手动添加。' if not balls else '候选球号待确认；右键确认母球和目标球后生成可行路线。')
             if any(b.number == 0 for b in balls) and any(b.number not in (None, 0) for b in balls):
                 message = '当前确认球位与配置下没有可行直线路线。'
-        self.result = Result(frame, balls, shots, self.config.mode == '3d', (perf_counter()-start)*1000, world, detections, message=message)
+        cached = self._physics_cache if self._physics_cache_key == self.physics_key(balls, shots, self.config) else None
+        self.result = Result(frame, balls, shots, self.config.mode == '3d', (perf_counter()-start)*1000, world, detections, message=message, physics=cached)
         return self.result
 
     def save(self):

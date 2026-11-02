@@ -14,6 +14,7 @@ dependencies = []
 images = ["Pillow>=10"]
 vision = ["numpy>=1.26", "opencv-python>=4.9", "Pillow>=10"]
 yolo = ["numpy>=1.26", "opencv-python>=4.9", "Pillow>=10", "PyYAML>=6", "ultralytics>=8.3"]
+physics = ["pooltool-billiards==0.6.0"]
 
 [project.scripts]
 eight-ball-devtool = "eight_ball_devtool.__main__:main"

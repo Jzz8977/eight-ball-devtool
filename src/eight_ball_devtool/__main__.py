@@ -9,6 +9,7 @@ def main():
     parser.add_argument('--image', type=Path, help='以本地图片替代示例采集源')
     parser.add_argument('--detector', choices=['opencv', 'yolo'], default='opencv', help='图片检测器')
     parser.add_argument('--weights', type=Path, help='YOLO 权重，默认 yolo/checkpoints/yolo-eight-ball.pt')
+    parser.add_argument('--physics', action='store_true', help='使用 pooltool 仿真当前前三条几何候选')
     args = parser.parse_args()
     from .application import Controller
     controller = Controller(args.config)
@@ -25,9 +26,20 @@ def main():
             controller.load_image(args.image)
         except (OSError, ValueError, RuntimeError) as error:
             parser.error(str(error))
+    if args.physics:
+        try:
+            controller.run()
+            key, evaluation = controller.calculate_physics(controller.physics_request())
+            controller.accept_physics(key, evaluation)
+        except (OSError, ValueError, RuntimeError) as error:
+            parser.error(str(error))
     if args.check:
         result = controller.run()
         print(f'Python pipeline OK: source={result.frame.source}, mode={controller.config.mode}, balls={len(result.balls)}, shots={len(result.shots)}, fusion={result.fused}, status={result.status}')
+        if result.physics:
+            physics = result.physics.selected
+            print(f'pooltool: candidates={len(result.physics.candidates)}, duration={physics.duration:.3f}s, accepted={physics.accepted}, events={len(physics.events)}, trajectories={len(physics.trajectories)}')
+            print(physics.reason)
         return
     from .ui import Workbench
     Workbench(controller).mainloop()

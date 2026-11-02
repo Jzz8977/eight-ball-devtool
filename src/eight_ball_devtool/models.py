@@ -49,6 +49,59 @@ class Shot:
 
 
 @dataclass(frozen=True)
+class CueAction:
+    direction_deg: float
+    speed_m_s: float
+    side_spin: float = 0
+    top_spin: float = 0
+
+
+@dataclass(frozen=True)
+class TrajectorySample:
+    time: float
+    x: float
+    y: float
+    z: float
+
+
+@dataclass(frozen=True)
+class BallTrajectory:
+    ball_id: str
+    number: int | None
+    samples: tuple[TrajectorySample, ...]
+    pocketed: bool
+
+
+@dataclass(frozen=True)
+class CollisionEvent:
+    time: float
+    kind: str
+    agents: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SimulationResult:
+    shot: Shot
+    action: CueAction
+    trajectories: tuple[BallTrajectory, ...]
+    events: tuple[CollisionEvent, ...]
+    duration: float
+    target_pocketed: bool
+    cue_pocketed: bool
+    first_contact: str | None
+    accepted: bool
+    reason: str
+    pocket_id: str
+    completed: bool
+
+
+@dataclass(frozen=True)
+class PhysicsEvaluation:
+    selected: SimulationResult
+    candidates: tuple[SimulationResult, ...]
+
+
+@dataclass(frozen=True)
 class Result:
     frame: Frame
     balls: tuple[Ball, ...]
@@ -60,3 +113,4 @@ class Result:
     detections: tuple[Detection, ...] = ()
     status: str = 'ready'
     message: str = ''
+    physics: PhysicsEvaluation | None = None

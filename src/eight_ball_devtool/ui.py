@@ -51,6 +51,7 @@ class Workbench(tk.Tk):
         self.form_vars = {}
         self.loader = ThreadPoolExecutor(max_workers=1, thread_name_prefix='image-acquisition')
         self.image_job = None
+        self.physics_job = None
         self.last_message = ''
         self._build()
         self.renderer = TableRenderer(self.canvas)
@@ -184,6 +185,8 @@ class Workbench(tk.Tk):
         self.scene_status = self.label(scene_head, '● 几何引擎运行中', 8, '#819b70')
         self.scene_status.pack(side='left', padx=12)
         self.button(scene_head, '导入图片', self.import_image).pack(side='right')
+        self.physics_button = self.button(scene_head, '物理仿真', self.start_physics)
+        self.physics_button.pack(side='right', padx=3)
         self.button(scene_head, '示例', self.use_demo).pack(side='right', padx=3)
         self.view_button = self.button(scene_head, '采集画面', self.toggle_view)
         self.view_button.pack(side='right', padx=5)
@@ -268,10 +271,12 @@ class Workbench(tk.Tk):
         self.save_button.configure(state='disabled' if disabled else 'normal')
         self.label(self.config_body, LAYERS[index][2], 9, '#829371', wraplength=230, justify='left').pack(anchor='w', pady=(0, 14))
 
+        form_parent = self.config_body
+
         def entry(name, title):
-            self.label(self.config_body, title, 8, '#809172').pack(anchor='w', pady=(0, 4))
+            self.label(form_parent, title, 8, '#809172').pack(anchor='w', pady=(0, 4))
             var = tk.StringVar(value=f'{getattr(config, name):g}')
-            field = ttk.Entry(self.config_body, textvariable=var, state='disabled' if disabled else 'normal')
+            field = ttk.Entry(form_parent, textvariable=var, state='disabled' if disabled else 'normal')
             field.pack(fill='x', pady=(0, 10))
             self.form_vars[name] = (var, float)
 
@@ -281,9 +286,9 @@ class Workbench(tk.Tk):
             self.form_vars[name] = (var, bool)
 
         def combo(name, title, choices):
-            self.label(self.config_body, title, 8, '#809172').pack(anchor='w', pady=(0, 4))
+            self.label(form_parent, title, 8, '#809172').pack(anchor='w', pady=(0, 4))
             var = tk.StringVar(value=next(label for label, value in choices.items() if value == getattr(config, name)))
-            ttk.Combobox(self.config_body, textvariable=var, values=list(choices), state='readonly').pack(fill='x', pady=(0, 12))
+            ttk.Combobox(form_parent, textvariable=var, values=list(choices), state='readonly').pack(fill='x', pady=(0, 12))
             self.form_vars[name] = (var, lambda value: choices[value])
 
         if index == 0:
@@ -302,9 +307,20 @@ class Workbench(tk.Tk):
             self.label(self.config_body, f'整桌外形：{config.table_outer_length:g} × {config.table_outer_width:g}\n× {config.table_outer_height:g} mm（不作坐标边界）\n内径当前为名义值，可按实测修改。', 8, MUTED, justify='left', wraplength=230).pack(anchor='w', pady=4)
             self.label(self.config_body, f'已保存标定点：{len(config.calibration)} / 4', 8, MUTED).pack(anchor='w', pady=8)
         elif index == 3:
+            tabs = ttk.Notebook(self.config_body)
+            tabs.pack(fill='both', expand=True)
+            planning, striking = tk.Frame(tabs, bg=WHITE, padx=8, pady=12), tk.Frame(tabs, bg=WHITE, padx=8, pady=12)
+            tabs.add(planning, text='几何规划')
+            tabs.add(striking, text='击球参数')
+            form_parent = planning
             combo('target_group', '可击打球组', {'全色球 1–7': 'solid', '花色球 9–15': 'stripe', '黑 8': 'eight', '任意球': 'any'})
             entry('max_cut_angle', '最大切球角 / °')
-            self.label(self.config_body, '已实现：幽灵球瞄准、直线入袋、\n障碍物检测、候选路线排序。\n\n暂不计算库边反弹、旋转和速度。', 8, '#8b9b7d', justify='left').pack(anchor='w', pady=8)
+            self.label(planning, '几何候选 → pooltool 仿真\n检查首碰、模型进球与母球落袋。\n\n保存参数后点击“物理仿真”。\n袋口/摩擦参数仍需实测校准。', 8, '#8b9b7d', justify='left').pack(anchor='w', pady=8)
+            form_parent = striking
+            entry('cue_speed', '杆头碰撞速度 / m·s⁻¹')
+            entry('cue_side_spin', '侧塞 a（-0.8～0.8）')
+            entry('cue_top_spin', '高低杆 b（-0.8～0.8）')
+            self.label(striking, 'a 正为左塞，b 正为高杆。\n遵循 pooltool 的杆向坐标约定。\n当前抬杆角固定为 0，不计算跳球。', 8, MUTED, justify='left').pack(anchor='w', pady=4)
         elif index == 4:
             if disabled:
                 self.label(self.config_body, '当前 2D 模式已旁路本层。\n切换 3D 空间模式后可配置。', 9, MUTED, justify='left').pack(anchor='w', pady=5)
@@ -352,7 +368,11 @@ class Workbench(tk.Tk):
         self.metric_labels[1][1].configure(text='检测按图片缓存 · 坐标/规划实测' if image_mode else 'Python 实测 · 不含绘制时间')
         self.metric_labels[2][0].configure(text='— / —' if result.status == 'needs_calibration' else f'{len(result.balls)} / {len(result.shots)}')
         self.metric_labels[2][1].configure(text=f'{len(result.detections)} 个候选 · 待标定' if result.status == 'needs_calibration' else ('未知球号仅作障碍物' if image_mode else '直线入袋 · 含障碍物检测'))
-        if result.shots:
+        if result.physics:
+            simulation = result.physics.selected
+            status = '通过基础检查' if simulation.accepted else '不推荐'
+            self.shot_label.configure(text=f'pooltool · {status} · 目标 {simulation.shot.target.number} · 杆速 {simulation.action.speed_m_s:g} m/s · {simulation.reason}', wraplength=650)
+        elif result.shots:
             shot = result.shots[0]
             self.shot_label.configure(text=f'{"图片球位方案（理想袋口）" if image_mode else "推荐示例方案"}  ·  目标 {shot.target.number} 号球    /    切球 {shot.cut_angle:.1f}°    /    路径 {shot.distance/1000:.2f} m')
         else:
@@ -367,6 +387,37 @@ class Workbench(tk.Tk):
         if self.running:
             self.run_pipeline()
         self.after(700, self.tick)
+
+    def start_physics(self):
+        if self.physics_job is not None:
+            return
+        try:
+            request = self.controller.physics_request()
+        except ValueError as error:
+            messagebox.showinfo('物理仿真', str(error), parent=self)
+            return
+        self.physics_button.configure(state='disabled', text='仿真中…')
+        self.physics_job = self.loader.submit(self.controller.calculate_physics, request)
+        self.log('Physics', 'pooltool 正在仿真几何候选；首次运行需编译物理计算内核')
+        self.after(80, self.poll_physics)
+
+    def poll_physics(self):
+        if not self.physics_job.done():
+            self.after(80, self.poll_physics)
+            return
+        job, self.physics_job = self.physics_job, None
+        self.physics_button.configure(state='normal', text='物理仿真')
+        try:
+            key, evaluation = job.result()
+            if not self.controller.accept_physics(key, evaluation):
+                self.log('Physics', '球位或参数已变化，旧仿真结果已丢弃，请重新仿真')
+                return
+        except Exception as error:
+            self.log('Physics', str(error))
+            messagebox.showerror('物理仿真失败', str(error), parent=self)
+            return
+        self.log('Physics', f'已模拟 {len(evaluation.candidates)} 个候选：{evaluation.selected.reason}')
+        self.run_pipeline()
 
     def toggle_running(self):
         self.running = not self.running

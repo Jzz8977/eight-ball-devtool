@@ -46,7 +46,20 @@ class TableRenderer:
         for p in pockets(config.table_width, config.table_height):
             x, y = xy(p)
             c.create_oval(x-pr, y-pr, x+pr, y+pr, fill='#162e25', outline='#a0b088', width=2)
-        if result and config.show_paths and result.shots:
+        if result and config.show_paths and result.physics:
+            simulation = result.physics.selected
+            for path in simulation.trajectories:
+                points = []
+                last = None
+                for sample in path.samples:
+                    position = xy(Point(sample.x, sample.y))
+                    if last is None or (position[0]-last[0])**2+(position[1]-last[1])**2 > .1:
+                        points.extend(position)
+                        last = position
+                if len(points) >= 4:
+                    color = '#e7cc7d' if path.number == 0 else ('#badea8' if path.number == simulation.shot.target.number else '#8db4a5')
+                    c.create_line(*points, fill=color, width=2)
+        elif result and config.show_paths and result.shots:
             shot = result.shots[0]
             cue = next(b for b in result.balls if b.number == 0)
             c.create_line(*xy(cue.center), *xy(shot.ghost), fill='#e7cc7d', width=2, dash=(7, 5), arrow='last')
@@ -68,7 +81,8 @@ class TableRenderer:
                     c.create_oval(x-5, y-5, x+5, y+5, fill='#f4f1df', outline='')
                     c.create_text(x, y, text='?' if ball.number is None else ball.number, fill='#28392f', font=('Segoe UI', 6, 'bold'))
                 c.create_oval(x-r*.45, y-r*.65, x-r*.1, y-r*.3, fill='#fff9e4', outline='')
-        c.create_text(16, 16, anchor='nw', text='TABLE_01   /   3D 透视示意' if perspective else 'TABLE_01   /   2D DIGITAL TABLE', fill='#7a9077', font=('Consolas', 8))
+        title = 'POOLTOOL / 模型仿真轨迹' if result and result.physics else ('TABLE_01   /   3D 透视示意' if perspective else 'TABLE_01   /   2D DIGITAL TABLE')
+        c.create_text(16, 16, anchor='nw', text=title, fill='#7a9077', font=('Microsoft YaHei UI', 8))
         c.create_text(16, height-15, anchor='sw', text=f'{config.table_width:g} × {config.table_height:g} mm', fill='#819579', font=('Consolas', 8))
         c.create_text(width-16, height-15, anchor='se', text='母球路径 ┄ 黄色    目标路径 ┄ 绿色', fill='#819579', font=('Microsoft YaHei UI', 8))
 

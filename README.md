@@ -24,7 +24,9 @@ python -m venv .venv
 
 训练和使用 17 类 YOLO 检测器时安装 `python -m pip install -r requirements-yolo.txt`。它增加 Ultralytics、PyYAML 及其传递依赖；安装依赖不会自动训练台球模型，相邻目录的旧单类别 YOLOv5 权重也不满足本项目 17 类约定。
 
-以上是最低版本依赖声明，尚非精确锁定的环境；本次没有执行联网安装或验证模型推理环境。
+以上图像 / YOLO 依赖使用最低版本声明，尚非完整锁定的环境；真实 YOLO 权重和精度仍需自行训练验证。
+
+物理仿真复用 `pooltool-billiards==0.6.0`，已从本机下载的源码安装到本项目 `.venv`。启动 `.\.venv\Scripts\python.exe main.py` 后点击“物理仿真”；计算层可设置杆速、侧塞和高低杆。安装与模型边界见 [物理引擎及实验说明](examples/physics/README.md)。
 
 可选安装为本地包：`python -m pip install -e .`，随后运行 `eight-ball-devtool` 或 `python -m eight_ball_devtool`。
 
@@ -36,6 +38,10 @@ eight-ball-devtool/
 ├── pyproject.toml                # Python 项目和可选依赖
 ├── requirements.txt              # 项目 + 图像 / OpenCV 开发依赖
 ├── requirements-yolo.txt         # 可选的后续 Ultralytics 开发依赖
+├── requirements-physics.txt      # 可选 pooltool 0.6.0 及 Panda3D 下载源
+├── requirements-experiments.txt  # 可选的实验绘图依赖
+├── examples/physics/             # 30 度法则 / 直线球难度实验与说明
+├── third_party/pooltool/         # 上游许可证及改编说明
 ├── configs/                      # 中式球桌配置和规格来源记录
 ├── yolo/                         # 17 类数据集、训练/验证代码、固定权重目录
 ├── src/eight_ball_devtool/
@@ -64,10 +70,12 @@ eight-ball-devtool/
 │   ├── computation/              # 计算层
 │   │   ├── __init__.py
 │   │   ├── planner.py            # 已有幽灵球与直线规划
-│   │   ├── aiming.py             # 瞄准（空文件）
-│   │   ├── trajectory.py         # 路径（空文件）
-│   │   ├── collision.py          # 碰撞预测（空文件）
-│   │   └── physics.py            # 物理引擎（空文件）
+│   │   ├── aiming.py             # 纯滚动自然分离角参考公式
+│   │   ├── trajectory.py         # 引擎米制坐标转换与轨迹采样
+│   │   ├── collision.py          # 碰撞事件与基础进球 / 落袋检查
+│   │   ├── physics.py            # pooltool 原版物理引擎适配
+│   │   ├── pooltool_runtime.py   # 项目独立的引擎配置目录
+│   │   └── experiments.py        # 两个可重复的原版物理实验
 │   ├── fusion/                   # 融合层，仅 3D 启用
 │   │   ├── __init__.py
 │   │   ├── registration.py       # 已有手动刚体配准
@@ -173,7 +181,9 @@ python main.py --config configs/chinese-eight-ball.json
 
 ## 待接入
 
-真实摄像头、屏幕和深度采集；真实台球数据采集、YOLO 训练及逐类精度验证；OpenCV 相机畸变校正；真实袋口配准；库边反弹、旋转和速度仿真；SLAM 定位；真实 3D / AR 渲染；手机 / 眼镜通信。
+真实摄像头、屏幕和深度采集；真实台球数据采集、YOLO 训练及逐类精度验证；OpenCV 相机畸变校正；真实袋口和摩擦参数校准；自动搜索反弹球、杆速与旋转；完整八球规则；SLAM 定位；真实 3D / AR 渲染；手机 / 眼镜通信。
+
+已接入的 pooltool 负责给定击球参数下的球球碰撞、库边响应、旋转 / 速度演化与模型落袋。UI 在后台仿真前三个直线几何候选，并绘制选中方案的轨迹；球位或参数变化会使旧结果失效。当前袋口仍是上游模型，不代表中式球桌实测袋口。
 
 示例模式和真实图片模式独立。默认真实图片候选来自 OpenCV 或人工添加，不使用示例球位；显式选择 `--detector yolo` 并提供合格权重后，球号和球洞由模型预测，可人工修正。3D 融合当前是手动配准，不是 SLAM。手机 / 眼镜仅是保留的输出配置项。
 
@@ -182,6 +192,9 @@ python main.py --config configs/chinese-eight-ball.json
 ```powershell
 python main.py --check
 python -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe main.py --check --physics
+.\.venv\Scripts\python.exe examples/physics/run_experiments.py 30-degree
+.\.venv\Scripts\python.exe examples/physics/run_experiments.py straight-shot
 ```
 
-示例模式与几何测试无需第三方包；图片采集测试需要 Pillow 或 OpenCV，候选检测测试需要 OpenCV，数据集检查测试需要 PyYAML，未安装时对应测试会明确跳过。YOLO 接口测试使用模拟模型，不代表已经进行了真实训练或推理精度验证。
+示例模式与几何测试无需第三方包；图片采集测试需要 Pillow 或 OpenCV，候选检测测试需要 OpenCV，数据集检查测试需要 PyYAML，真实物理集成测试需要 pooltool 0.6.0，未安装时对应测试会明确跳过。YOLO 接口测试使用模拟模型，不代表已经进行了真实训练或推理精度验证。
