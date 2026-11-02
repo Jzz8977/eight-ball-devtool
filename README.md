@@ -2,6 +2,8 @@
 
 独立、可继续开发内部逻辑的 **Python 原生桌面项目**。界面使用 Tkinter，核心代码使用 Python 标准库，无 Node.js、网页服务或浏览器依赖。不导入相邻 `eight-ball` 项目代码。
 
+开发进度、后续执行顺序和各阶段验收条件见 [CHECKLIST.md](CHECKLIST.md)。
+
 ## 启动
 
 需要 Python 3.11+（含 Tkinter；Windows 官方 Python 通常自带）。在当前目录执行：
