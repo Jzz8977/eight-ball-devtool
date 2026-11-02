@@ -1,12 +1,12 @@
 """Application orchestration and persistence; no UI dependencies."""
 from time import perf_counter
-from .acquisition import DemoSource
-from .config import Config, DEFAULT_CONFIG
-from .coordinates import map_detections
-from .perception import DemoDetector
-from .computation import plan
-from .fusion import fuse
-from .models import Result
+from ..acquisition import DemoSource
+from ..config import Config, DEFAULT_CONFIG
+from ..coordinates import map_detections
+from ..perception import DemoDetector
+from ..computation import plan
+from ..fusion import fuse
+from ..models import Result
 
 LAYERS = (
     ('采集层', 'ACQUISITION', '平面图 / 3D 图'),

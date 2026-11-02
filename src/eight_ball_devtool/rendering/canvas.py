@@ -1,6 +1,6 @@
 """Native Canvas rendering, separate from detection and computation."""
-from .models import Point
-from .computation import pockets
+from ..models import Point
+from ..computation import pockets
 
 COLORS = {0: '#f8f5e6', 1: '#e6b840', 2: '#487fbe', 3: '#c36759', 4: '#9479ad', 5: '#d59253', 6: '#729766', 7: '#935f58', 8: '#24392f'}
 

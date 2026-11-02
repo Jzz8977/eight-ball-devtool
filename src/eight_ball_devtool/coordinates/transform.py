@@ -1,6 +1,6 @@
 """Pure Python planar homography. Image points are normalized before fitting."""
 import math
-from .models import Ball, Point
+from ..models import Ball, Point
 
 
 def validate_quad(points):

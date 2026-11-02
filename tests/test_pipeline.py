@@ -34,7 +34,7 @@ class PipelineTests(unittest.TestCase):
     def test_2d_never_calls_fusion_and_3d_produces_world_coordinates(self):
         with tempfile.TemporaryDirectory() as temp:
             controller = Controller(Path(temp)/'config.json')
-            with patch('eight_ball_devtool.application.fuse', side_effect=AssertionError('2D must bypass fusion')):
+            with patch('eight_ball_devtool.application.pipeline.fuse', side_effect=AssertionError('2D must bypass fusion')):
                 result = controller.run()
                 self.assertFalse(result.fused)
                 self.assertEqual(result.world_points, ())

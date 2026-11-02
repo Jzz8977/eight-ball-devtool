@@ -4,7 +4,7 @@ The bundled detector ONLY accepts demo frames. Real images are never passed off
 as recognized scenes. Implement Detector.detect for YOLO/OpenCV integration.
 """
 from typing import Protocol
-from .models import Detection, Frame, Point
+from ..models import Detection, Frame, Point
 
 
 class Detector(Protocol):

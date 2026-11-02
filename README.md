@@ -41,19 +41,55 @@ eight-ball-devtool/
 │   ├── ui.py                     # Tkinter 原生界面，只做交互与展示
 │   ├── models.py                 # 帧、球位、路径、结果数据契约
 │   ├── config.py                 # 参数验证和 JSON 持久化
-│   ├── acquisition.py            # 采集层：示例帧、图片帧
-│   ├── perception.py             # 感知层：检测器协议、示例检测器
-│   ├── coordinates.py            # 坐标层：四点单应矩阵、坐标转换
-│   ├── computation.py            # 计算层：幽灵球、直线规划、碰撞检查
-│   ├── fusion.py                 # 融合层：3D 手动刚体配准
-│   ├── rendering.py              # 渲染层：Canvas 数字球桌、透视示意
-│   └── application.py            # 应用层：流水线编排、配置与结果
+│   ├── acquisition/              # 采集层
+│   │   ├── __init__.py
+│   │   ├── sources.py            # 已有示例帧、图片帧
+│   │   ├── camera.py             # 摄像头采集（空文件）
+│   │   ├── screen.py             # 屏幕采集（空文件）
+│   │   ├── image.py              # 图像采集扩展（空文件）
+│   │   └── depth.py              # 深度 / 3D 采集（空文件）
+│   ├── perception/               # 感知层
+│   │   ├── __init__.py
+│   │   ├── detector.py           # 已有检测器协议与示例检测器
+│   │   ├── yolo.py               # YOLO 检测（空文件）
+│   │   ├── ball_classifier.py    # 球号分类（空文件）
+│   │   └── calibration.py        # OpenCV 标定（空文件）
+│   ├── coordinates/              # 坐标层
+│   │   ├── __init__.py
+│   │   ├── transform.py          # 已有单应矩阵与坐标转换
+│   │   ├── alignment.py          # 球桌对齐（空文件）
+│   │   └── coordinate_system.py  # 坐标系定义（空文件）
+│   ├── computation/              # 计算层
+│   │   ├── __init__.py
+│   │   ├── planner.py            # 已有幽灵球与直线规划
+│   │   ├── aiming.py             # 瞄准（空文件）
+│   │   ├── trajectory.py         # 路径（空文件）
+│   │   ├── collision.py          # 碰撞预测（空文件）
+│   │   └── physics.py            # 物理引擎（空文件）
+│   ├── fusion/                   # 融合层，仅 3D 启用
+│   │   ├── __init__.py
+│   │   ├── registration.py       # 已有手动刚体配准
+│   │   ├── localization.py       # 空间定位（空文件）
+│   │   └── coordinate_fusion.py  # 坐标融合（空文件）
+│   ├── rendering/                # 渲染层
+│   │   ├── __init__.py
+│   │   ├── canvas.py             # 已有 Canvas 球桌绘制
+│   │   ├── table_2d.py           # 2D 数字桌球扩展（空文件）
+│   │   └── overlay_3d.py         # 3D 叠加（空文件）
+│   └── application/              # 应用层
+│       ├── __init__.py
+│       ├── pipeline.py           # 已有流水线编排
+│       ├── desktop.py            # 电脑终端输出扩展（空文件）
+│       ├── mobile.py             # 手机终端（空文件）
+│       └── glasses.py            # 眼镜终端（空文件）
 ├── tests/test_pipeline.py        # 标准库 unittest
 ├── runtime/                      # 运行生成的本地配置（不入库）
 └── reference/web-prototype/       # 之前网页原型，仅保留视觉参考
 ```
 
 后续采集、YOLO、分类器、OpenCV、物理引擎、SLAM 与终端通信的实现都放在此项目，不需要转移到其他目录。
+
+七层均为 Python 包，`__init__.py` 保留原有公开导入方式；已有逻辑移动到对应实现文件，新增扩展文件暂为空。原生桌面 UI 仍在 `ui.py`，共享配置与数据模型仍在 `config.py` 和 `models.py`。
 
 ## 283 × 155 × 84 cm 球桌规格
 
@@ -83,7 +119,7 @@ python main.py --config configs/chinese-eight-ball.json
 
 采集（平面图 / 3D 图）→ 感知（YOLO 检测、球号分类、OpenCV 标定）→ 坐标（球桌坐标对齐与转换）→ 计算（瞄准、路径、碰撞预测）→ 融合（空间定位与坐标融合，仅 3D）→ 渲染（2D 数字桌球 / 3D 叠加）→ 应用（电脑 / 手机 / 眼镜）。
 
-`Controller.run()` 是流水线入口。2D 在编排层跳过 `fusion.fuse()`，融合实现也拒绝 2D 调用；3D 使用可配置的平移和水平旋转完成台面至世界坐标配准。
+`application/pipeline.py` 中的 `Controller.run()` 是流水线入口。2D 在编排层跳过 `fusion.fuse()`，融合实现也拒绝 2D 调用；3D 使用可配置的平移和水平旋转完成台面至世界坐标配准。
 
 ## 已实现
 

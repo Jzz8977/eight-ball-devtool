@@ -1,5 +1,5 @@
 """Acquisition: demo frames and image metadata. Add camera/depth adapters here."""
-from .models import Frame
+from ..models import Frame
 
 
 class DemoSource:

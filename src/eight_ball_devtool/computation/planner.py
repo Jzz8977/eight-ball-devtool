@@ -3,7 +3,7 @@
 This is not a full physics simulator: no cushions, spin, speed or pocket jaws.
 """
 from math import acos, degrees, hypot
-from .models import Point, Shot
+from ..models import Point, Shot
 
 
 def segment_distance(p, a, b):
