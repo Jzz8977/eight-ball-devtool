@@ -55,4 +55,14 @@ def map_detections(detections, frame, config):
     # Demo frame covers the table exactly. Real images need explicit calibration.
     points = [[0, 0], [1, 0], [1, 1], [0, 1]] if frame.source == 'demo' else config.calibration
     transform = TableTransform(points, config.table_width, config.table_height)
-    return tuple(Ball(d.number, transform.project(Point(d.center.x/frame.width, d.center.y/frame.height)), config.ball_radius) for d in detections)
+    balls = []
+    for detection in detections:
+        if detection.kind != 'ball':
+            continue
+        p = Point(detection.center.x/frame.width, detection.center.y/frame.height)
+        if frame.source != 'demo':
+            if any((points[(i+1)%4][0]-a[0])*(p.y-a[1])-(points[(i+1)%4][1]-a[1])*(p.x-a[0]) < -1e-9 for i, a in enumerate(points)):
+                continue
+        center = transform.project(p)
+        balls.append(Ball(detection.number, center, config.ball_radius))
+    return tuple(balls)

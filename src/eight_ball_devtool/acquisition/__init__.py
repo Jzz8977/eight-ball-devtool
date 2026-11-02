@@ -1,3 +1,3 @@
-from .sources import DemoSource, ImageSource
+from .sources import DemoSource, FrameSource, ImageSource
 
-__all__ = ['DemoSource', 'ImageSource']
+__all__ = ['DemoSource', 'FrameSource', 'ImageSource']

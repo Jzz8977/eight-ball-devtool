@@ -1,0 +1,19 @@
+[
+  {"name": "cue_ball", "type": "rectangle", "attributes": []},
+  {"name": "ball_1", "type": "rectangle", "attributes": []},
+  {"name": "ball_2", "type": "rectangle", "attributes": []},
+  {"name": "ball_3", "type": "rectangle", "attributes": []},
+  {"name": "ball_4", "type": "rectangle", "attributes": []},
+  {"name": "ball_5", "type": "rectangle", "attributes": []},
+  {"name": "ball_6", "type": "rectangle", "attributes": []},
+  {"name": "ball_7", "type": "rectangle", "attributes": []},
+  {"name": "ball_8", "type": "rectangle", "attributes": []},
+  {"name": "ball_9", "type": "rectangle", "attributes": []},
+  {"name": "ball_10", "type": "rectangle", "attributes": []},
+  {"name": "ball_11", "type": "rectangle", "attributes": []},
+  {"name": "ball_12", "type": "rectangle", "attributes": []},
+  {"name": "ball_13", "type": "rectangle", "attributes": []},
+  {"name": "ball_14", "type": "rectangle", "attributes": []},
+  {"name": "ball_15", "type": "rectangle", "attributes": []},
+  {"name": "pocket", "type": "rectangle", "attributes": []}
+]

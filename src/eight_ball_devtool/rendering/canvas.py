@@ -61,7 +61,7 @@ class TableRenderer:
                 self.hit_points.append((x, y, r+7, ball))
                 color = COLORS.get(ball.number if ball.number is None or ball.number < 9 else ball.number-8, '#9ba991')
                 c.create_oval(x-r+2, y-r+3, x+r+2, y+r+3, fill='#2c5747', outline='')
-                c.create_oval(x-r, y-r, x+r, y+r, fill=color, outline='#cbd6b9' if selected == ball.number else color, width=2)
+                c.create_oval(x-r, y-r, x+r, y+r, fill=color, outline='#cbd6b9' if selected == ball else color, width=2)
                 if ball.number is not None and ball.number > 8:
                     c.create_arc(x-r, y-r, x+r, y+r, start=0, extent=180, style='chord', fill='#efefdb', outline='')
                 if config.show_numbers and ball.number != 0:

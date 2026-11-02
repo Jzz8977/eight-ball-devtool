@@ -4,11 +4,13 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from .application import LAYERS
 from .config import Config
 from .coordinates import TableTransform, validate_quad
 from .rendering import TableRenderer
+from .models import Point
 
 BG = '#f3f5f2'
 FG = '#293d32'
@@ -47,14 +49,21 @@ class Workbench(tk.Tk):
         self.calibrating = False
         self.points = []
         self.form_vars = {}
+        self.loader = ThreadPoolExecutor(max_workers=1, thread_name_prefix='image-acquisition')
+        self.image_job = None
+        self.last_message = ''
         self._build()
         self.renderer = TableRenderer(self.canvas)
         self.canvas.bind('<Configure>', lambda e: self.draw())
         self.canvas.bind('<Button-1>', self.canvas_click)
+        self.canvas.bind('<Button-3>', self.image_context_menu)
         self.bind('<Escape>', lambda e: self.cancel_calibration())
-        self.protocol('WM_DELETE_WINDOW', self.destroy)
+        self.protocol('WM_DELETE_WINDOW', self.close)
         self.refresh_layer_cards()
         self.build_form()
+        frame = self.controller.source.capture()
+        if frame.source == 'image':
+            self.install_image_preview(frame)
         self.run_pipeline()
         self.log('System', 'Python 原生桌面工作台已启动，七层模块位于本项目 src 目录')
         if self.controller.startup_warning:
@@ -89,7 +98,8 @@ class Workbench(tk.Tk):
         top.pack(fill='x')
         top.pack_propagate(False)
         self.label(top, '工作空间    /    系统总览', 9, '#7c8f75', '#fcfdfb').pack(side='left', padx=25)
-        self.label(top, '●  Python 本地引擎     /     示例输入', 8, '#7b9271', '#fcfdfb').pack(side='right', padx=25)
+        self.input_badge = self.label(top, '●  Python 本地引擎     /     示例输入', 8, '#7b9271', '#fcfdfb')
+        self.input_badge.pack(side='right', padx=25)
         # Keep every control reachable on smaller screens and high-DPI desktops.
         scroll_area = tk.Frame(content, bg=BG)
         scroll_area.pack(fill='both', expand=True)
@@ -174,6 +184,7 @@ class Workbench(tk.Tk):
         self.scene_status = self.label(scene_head, '● 几何引擎运行中', 8, '#819b70')
         self.scene_status.pack(side='left', padx=12)
         self.button(scene_head, '导入图片', self.import_image).pack(side='right')
+        self.button(scene_head, '示例', self.use_demo).pack(side='right', padx=3)
         self.view_button = self.button(scene_head, '采集画面', self.toggle_view)
         self.view_button.pack(side='right', padx=5)
         self.canvas = tk.Canvas(scene, bg='#eff3eb', highlightthickness=1, highlightbackground=LINE, height=240)
@@ -228,7 +239,8 @@ class Workbench(tk.Tk):
             card.configure(bg=bg, highlightbackground='#88a875' if i == self.selected_layer else LINE)
             for child in card.winfo_children():
                 child.configure(bg=bg)
-            status.configure(text='已旁路 · 仅 3D' if i == 4 and not is_3d else ['示例 / 图片', '示例检测器', '单应矩阵', '直线规划', '手动配准', 'Canvas 绘制', '桌面已接入'][i])
+            image_mode = self.controller.source.capture().source == 'image'
+            status.configure(text='已旁路 · 仅 3D' if i == 4 and not is_3d else ['真实图片' if image_mode else '示例输入', '图像候选 / 人工确认' if image_mode else '示例检测器', '单应矩阵', '直线规划', '手动配准', 'Canvas 绘制', '桌面已接入'][i])
         self.flow_label.configure(text='图像采集 → 感知识别 → 球桌坐标 → 几何计算 → ' + ('空间融合 → 三维示意 → 终端' if is_3d else '二维渲染 → 终端  ·  融合层已旁路'))
         self.metric_labels[3][0].configure(text='7 / 7' if is_3d else '6 / 7')
         self.metric_labels[3][1].configure(text='3D 模式 · 手动空间配准' if is_3d else '2D 模式 · 融合层旁路')
@@ -275,10 +287,13 @@ class Workbench(tk.Tk):
             self.form_vars[name] = (var, lambda value: choices[value])
 
         if index == 0:
-            self.label(self.config_body, '当前输入：固定示例球位\n\n本地 PNG 图片可预览与标定。\n安装 Pillow 后支持 JPEG / WebP。\n\n摄像头 / 屏幕 / 深度输入待接入。', 9, '#748b68', justify='left', wraplength=230).pack(anchor='w')
+            frame = self.controller.source.capture()
+            source_text = f'当前输入：{Path(frame.path).name}\n原图：{frame.width} × {frame.height}\n\n图片已送入感知和坐标流水线。\n先标定台面四角，再右键确认球号。' if frame.source == 'image' else '当前输入：固定示例球位\n\n导入图片后将切换真实图片源。\n支持 PNG / JPEG / WebP 等格式。'
+            self.label(self.config_body, source_text+'\n\n摄像头 / 屏幕 / 深度输入待接入。', 9, '#748b68', justify='left', wraplength=230).pack(anchor='w')
             self.button(self.config_body, '选择本地图片', self.import_image).pack(fill='x', pady=18)
         elif index == 1:
-            self.label(self.config_body, '检测器：DemoDetector\n\nYOLO：待接入位置检测\n球号分类：待接入独立分类器\nOpenCV：预留标定扩展接口\n\n本版本四点坐标变换使用纯 Python\n求解，真实图片不会生成虚构球位。', 9, '#748b68', justify='left', wraplength=230).pack(anchor='w')
+            detector_name = getattr(self.controller.image_detector, 'display_name', '自定义检测器')
+            self.label(self.config_body, f'图片检测：{detector_name}\n\n右键可确认或修正球号，\n也可添加遗漏球位、移除误检。\n\nYOLO 模式需自行训练 17 类权重。\n球洞仅叠加展示，不作障碍球。\n四点坐标变换使用纯 Python 求解。', 9, '#748b68', justify='left', wraplength=230).pack(anchor='w')
             self.button(self.config_body, '开始四点标定', self.start_calibration).pack(fill='x', pady=18)
         elif index == 2:
             entry('table_width', '有效台面长度（库边内沿）/ mm')
@@ -323,16 +338,29 @@ class Workbench(tk.Tk):
     def run_pipeline(self):
         try:
             result = self.controller.run()
-        except (ValueError, NotImplementedError) as error:
+        except (ValueError, RuntimeError, NotImplementedError) as error:
             self.log('Pipeline', str(error))
+            self.metric_labels[2][0].configure(text='— / —')
+            self.shot_label.configure(text=f'处理失败：{error}')
+            self.draw()
             return
+        image_mode = result.frame.source == 'image'
+        self.metric_labels[0][0].configure(text='IMAGE' if image_mode else 'DEMO')
+        self.metric_labels[0][1].configure(text=f'{result.frame.width} × {result.frame.height} · 真实图片' if image_mode else '固定示例球位 · 不伪装识别结果')
+        self.input_badge.configure(text='●  Python 本地引擎     /     '+('真实图片输入' if image_mode else '示例输入'))
         self.metric_labels[1][0].configure(text=f'{result.elapsed_ms:.2f} ms')
-        self.metric_labels[2][0].configure(text=f'{len(result.balls)} / {len(result.shots)}')
+        self.metric_labels[1][1].configure(text='检测按图片缓存 · 坐标/规划实测' if image_mode else 'Python 实测 · 不含绘制时间')
+        self.metric_labels[2][0].configure(text='— / —' if result.status == 'needs_calibration' else f'{len(result.balls)} / {len(result.shots)}')
+        self.metric_labels[2][1].configure(text=f'{len(result.detections)} 个候选 · 待标定' if result.status == 'needs_calibration' else ('未知球号仅作障碍物' if image_mode else '直线入袋 · 含障碍物检测'))
         if result.shots:
             shot = result.shots[0]
-            self.shot_label.configure(text=f'推荐示例方案  ·  目标 {shot.target.number} 号球    /    切球 {shot.cut_angle:.1f}°    /    路径 {shot.distance/1000:.2f} m')
+            self.shot_label.configure(text=f'{"图片球位方案（理想袋口）" if image_mode else "推荐示例方案"}  ·  目标 {shot.target.number} 号球    /    切球 {shot.cut_angle:.1f}°    /    路径 {shot.distance/1000:.2f} m')
         else:
-            self.shot_label.configure(text='当前配置下没有可行直线方案，请调整目标球组或最大切球角。')
+            self.shot_label.configure(text=result.message or '当前配置下没有可行直线方案，请调整目标球组或最大切球角。')
+        if result.message and result.message != self.last_message:
+            self.log('Pipeline', result.message)
+        self.last_message = result.message
+        self.scene_status.configure(text='● '+('待四点标定' if result.status == 'needs_calibration' else ('图片球位' if image_mode else '示例球位'))+(' · 已暂停' if not self.running else ''))
         self.draw()
 
     def tick(self):
@@ -364,32 +392,65 @@ class Workbench(tk.Tk):
         path = filedialog.askopenfilename(parent=self, title='选择采集图片', filetypes=[('图像', '*.png *.jpg *.jpeg *.webp *.gif *.ppm'), ('所有文件', '*.*')])
         if not path:
             return
-        try:
-            try:
-                from PIL import Image, ImageTk
-            except ImportError:
-                photo = tk.PhotoImage(file=path)
-                self.image_original = photo
-                self.image_size = (photo.width(), photo.height())
-            else:
-                with Image.open(path) as image:
-                    if image.width*image.height > 40_000_000:
-                        raise ValueError('图片请控制在 4000 万像素以内')
-                    image.load()
-                    self.image_original = image.convert('RGB')
-                    self.image_size = image.size
-        except (OSError, ValueError, tk.TclError) as error:
-            messagebox.showerror('无法加载图片', f'{error}\n\nJPEG / WebP 需要安装 Pillow：python -m pip install Pillow', parent=self)
+        if self.image_job is not None:
+            self.image_job.cancel()
+        self.image_job = self.loader.submit(self.controller.prepare_image, path)
+        self.scene_status.configure(text='● 图片解码与候选检测中…')
+        self.after(60, self.poll_image)
+
+    def poll_image(self):
+        job = self.image_job
+        if job is None:
             return
-        self.image_path = path
+        if not job.done():
+            self.after(60, self.poll_image)
+            return
+        self.image_job = None
+        try:
+            prepared = job.result()
+            self.install_image_preview(prepared[0].capture())
+        except Exception as error:
+            self.log('Source', f'导入失败，保留原输入：{error}')
+            messagebox.showerror('无法加载图片', str(error), parent=self)
+            return
+        self.controller.use_image(*prepared)
+        self.selected_ball = None
+        self.refresh_layer_cards()
+        self.build_form()
+        self.run_pipeline()
+        self.log('Source', f'已接入图片：{self.image_path}，{self.controller.source.capture().width} × {self.controller.source.capture().height}')
+
+    def install_image_preview(self, frame):
+        # The preview and downstream detector consume the SAME decoded snapshot.
+        photo = tk.PhotoImage(data=f'P6\n{frame.width} {frame.height}\n255\n'.encode()+frame.rgb, format='PPM')
+        self.image_original = photo
+        self.image_size = (frame.width, frame.height)
+        self.image_path = frame.path
         self.cancel_calibration()
-        # A calibration belongs to its source image; never silently reuse an old one.
-        self.controller.config.calibration = []
         self.points = []
         self.view = 'source'
         self.view_button.configure(text='数字球桌')
-        self.draw()
-        self.log('Source', f'已载入 {Path(path).name}，仅预览 / 标定；数字球桌仍为示例输入')
+
+    def use_demo(self):
+        if self.image_job is not None:
+            self.image_job.cancel()
+            self.image_job = None
+        self.controller.use_demo()
+        self.cancel_calibration()
+        self.image_original = None
+        self.image_path = None
+        self.image_rect = None
+        self.view = 'digital'
+        self.view_button.configure(text='采集画面')
+        self.selected_ball = None
+        self.refresh_layer_cards()
+        self.build_form()
+        self.run_pipeline()
+        self.log('Source', '已恢复示例采集源')
+
+    def close(self):
+        self.loader.shutdown(wait=False, cancel_futures=True)
+        self.destroy()
 
     def draw_image(self):
         c = self.canvas
@@ -398,7 +459,7 @@ class Workbench(tk.Tk):
         w, h = c.winfo_width(), c.winfo_height()
         if self.image_original is None:
             c.create_text(w/2, h/2-14, text='导入本地图片，开始采集预览与四点标定', fill='#7e9473', font=(FONT, 11))
-            c.create_text(w/2, h/2+14, text='尚未接入实际 YOLO 检测 / 图片与示例球局独立', fill='#9ba991', font=(FONT, 8))
+            c.create_text(w/2, h/2+14, text='导入后切换真实图片源；右键确认 / 添加球位', fill='#9ba991', font=(FONT, 8))
             return
         iw, ih = self.image_size
         scale = min(max(1, w-30)/iw, max(1, h-40)/ih, 1)
@@ -424,7 +485,57 @@ class Workbench(tk.Tk):
             cx, cy = x+px*dw, y+py*dh
             c.create_oval(cx-7, cy-7, cx+7, cy+7, fill='#e5b14c', outline=WHITE)
             c.create_text(cx, cy, text=i+1, fill='#2e4129', font=('Segoe UI', 8, 'bold'))
-        c.create_text(12, 10, anchor='nw', text='IMAGE PREVIEW / 未执行检测', fill='#7d9273', font=('Consolas', 8))
+        result = self.controller.result
+        if result and result.frame.source == 'image' and not self.calibrating:
+            for i, detection in enumerate(result.detections):
+                cx = x+detection.center.x/result.frame.width*dw
+                cy = y+detection.center.y/result.frame.height*dh
+                radius = max(5, detection.radius/result.frame.width*dw)
+                pocket = detection.kind == 'pocket'
+                color = '#bb9fe5' if pocket else ('#e1bf65' if detection.number is None else '#a8efac')
+                c.create_oval(cx-radius, cy-radius, cx+radius, cy+radius, outline=color, width=2)
+                label = '球洞' if pocket else ('?' if detection.number is None else str(detection.number))
+                c.create_text(cx, cy-radius-8, text=f'#{i+1} {label}', fill=color, font=(FONT, 8, 'bold'))
+        c.create_text(12, 10, anchor='nw', text='IMAGE SOURCE / 右键确认球号或添加球位', fill='#7d9273', font=(FONT, 8))
+
+    def image_context_menu(self, event):
+        if self.view != 'source' or self.calibrating or self.image_rect is None:
+            return
+        frame = self.controller.source.capture()
+        if frame.source != 'image':
+            return
+        x, y, w, h = self.image_rect
+        point = Point((event.x-x)/w*frame.width, (event.y-y)/h*frame.height)
+        if not (0 <= point.x < frame.width and 0 <= point.y < frame.height):
+            return
+        detections = self.controller.result.detections if self.controller.result else ()
+        hits = [(point.distance(d.center), i) for i, d in enumerate(detections) if point.distance(d.center) <= max(d.radius, 7/w*frame.width)]
+        index = min(hits)[1] if hits else None
+        if index is not None and detections[index].kind == 'pocket':
+            self.coordinate_text.configure(text=f'球洞 · 原图像素 ({point.x:.0f}, {point.y:.0f})；不参与障碍球计算')
+            return
+        menu = tk.Menu(self, tearoff=False)
+        menu.add_command(label='确认候选球号' if index is not None else '在此位置添加球', state='disabled')
+        for number in [None, *range(16)]:
+            label = '未知球 / 仅作障碍物' if number is None else ('母球 (0)' if number == 0 else f'{number} 号球')
+            def select(value=number):
+                if index is None:
+                    self.controller.add_image_ball(point, value)
+                else:
+                    self.controller.label_image_ball(index, value)
+                self.run_pipeline()
+                self.log('Annotation', '已更新图片球位，球号由人工确认')
+            menu.add_command(label=label, command=select)
+        if index is not None:
+            menu.add_separator()
+            def remove():
+                self.controller.remove_image_ball(index)
+                self.run_pipeline()
+            menu.add_command(label='移除误检候选', command=remove)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def start_calibration(self):
         if self.image_original is None:
@@ -449,8 +560,8 @@ class Workbench(tk.Tk):
         if self.view == 'digital':
             ball = self.renderer.hit(event.x, event.y)
             if ball is not None:
-                self.selected_ball = ball.number
-                self.coordinate_text.configure(text=f'{"母球" if ball.number == 0 else str(ball.number)+" 号球"}  X={ball.center.x:.1f}, Y={ball.center.y:.1f} mm')
+                self.selected_ball = ball
+                self.coordinate_text.configure(text=f'{"母球" if ball.number == 0 else ("未知球" if ball.number is None else str(ball.number)+" 号球")}  X={ball.center.x:.1f}, Y={ball.center.y:.1f} mm')
                 self.draw()
             return
         if not self.calibrating or self.image_rect is None:
@@ -465,9 +576,8 @@ class Workbench(tk.Tk):
                 validate_quad(self.points)
                 c = self.controller.config
                 transform = TableTransform(self.points, c.table_width, c.table_height)
-                updated = replace(c, calibration=[p[:] for p in self.points])
-                updated.save(self.controller.path)
-                self.controller.config = updated
+                self.controller.set_calibration(self.points)
+                self.run_pipeline()
                 self.log('Calibration', '单应矩阵已由 Python 求解并保存：' + ', '.join(f'{v:.3g}' for v in transform.h))
             except (ValueError, OSError) as error:
                 self.log('Calibration', f'标定失败：{error}')

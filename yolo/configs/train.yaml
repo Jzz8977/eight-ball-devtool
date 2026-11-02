@@ -1,0 +1,21 @@
+epochs: 100
+imgsz: 1280
+batch: 4
+workers: 0
+device: ''
+seed: 42
+deterministic: true
+patience: 30
+save: true
+plots: true
+# Preserve number glyphs and class-specific colors.
+fliplr: 0.0
+flipud: 0.0
+hsv_h: 0.0
+hsv_s: 0.1
+hsv_v: 0.2
+degrees: 10.0
+translate: 0.05
+scale: 0.2
+mosaic: 0.0
+mixup: 0.0

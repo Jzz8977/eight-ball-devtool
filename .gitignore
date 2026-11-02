@@ -3,3 +3,14 @@ __pycache__/
 .venv/
 *.egg-info/
 runtime/
+yolo/checkpoints/**/*.pt
+yolo/checkpoints/**/*.onnx
+yolo/checkpoints/**/*.json
+yolo/runs/
+yolo/datasets/eight-ball/images/**
+yolo/datasets/eight-ball/labels/**
+!yolo/datasets/eight-ball/images/**/
+!yolo/datasets/eight-ball/labels/**/
+!yolo/datasets/eight-ball/images/**/.gitkeep
+!yolo/datasets/eight-ball/labels/**/.gitkeep
+*.cache

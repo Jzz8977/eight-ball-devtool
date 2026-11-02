@@ -29,8 +29,11 @@ class Config:
     world_z: float = 750  # Demo registration only; not inferred from overall height.
     world_yaw: float = 0
     calibration: list[list[float]] = field(default_factory=list)
+    calibration_image_id: str = ''
 
     def validate(self):
+        if not isinstance(self.calibration_image_id, str):
+            raise ValueError('calibration_image_id 必须为字符串')
         if self.mode not in ('2d', '3d'):
             raise ValueError('模式只能为 2d 或 3d')
         if self.target_group not in ('solid', 'stripe', 'eight', 'any'):

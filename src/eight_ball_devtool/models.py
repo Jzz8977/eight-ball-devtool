@@ -1,5 +1,5 @@
 """Shared contracts; layer implementations must not depend on Tkinter."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import hypot
 
 
@@ -26,6 +26,8 @@ class Frame:
     width: int
     height: int
     path: str | None = None
+    rgb: bytes | None = field(default=None, repr=False)
+    image_id: str = ''
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,8 @@ class Detection:
     number: int | None
     center: Point
     radius: float
+    kind: str = 'ball'
+    confidence: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -53,3 +57,6 @@ class Result:
     elapsed_ms: float
     # Manual table-to-world registration, not a SLAM estimate.
     world_points: tuple[tuple[float, float, float], ...] = ()
+    detections: tuple[Detection, ...] = ()
+    status: str = 'ready'
+    message: str = ''

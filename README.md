@@ -20,9 +20,9 @@ python -m venv .venv
 
 `requirements.txt` 安装当前项目（可编辑模式）以及 NumPy、OpenCV、Pillow，与 `pyproject.toml` 的 `vision` 依赖组保持一致。Tkinter 随 Python 安装，不通过 pip 安装；可用 `python -m tkinter` 检查。
 
-仅需 JPEG / WebP 图片预览时也可单独安装 `python -m pip install Pillow`；未安装时支持 Tk 自带的 PNG / GIF / PPM。
+仅需图片导入与手动球位流程时，也可单独安装 `python -m pip install Pillow`；完整依赖中的 OpenCV 提供圆形候选检测。图片解码至少需要 Pillow 或 OpenCV，示例模式仍不依赖第三方包。
 
-后续开发新版 Ultralytics YOLO 检测器时使用可选的 `python -m pip install -r requirements-yolo.txt`。它增加 Ultralytics 及其传递依赖；安装依赖不会自动完成检测器或球号分类器的接入，也不代表相邻目录的旧 YOLOv5 权重可直接使用。
+训练和使用 17 类 YOLO 检测器时安装 `python -m pip install -r requirements-yolo.txt`。它增加 Ultralytics、PyYAML 及其传递依赖；安装依赖不会自动训练台球模型，相邻目录的旧单类别 YOLOv5 权重也不满足本项目 17 类约定。
 
 以上是最低版本依赖声明，尚非精确锁定的环境；本次没有执行联网安装或验证模型推理环境。
 
@@ -37,21 +37,23 @@ eight-ball-devtool/
 ├── requirements.txt              # 项目 + 图像 / OpenCV 开发依赖
 ├── requirements-yolo.txt         # 可选的后续 Ultralytics 开发依赖
 ├── configs/                      # 中式球桌配置和规格来源记录
+├── yolo/                         # 17 类数据集、训练/验证代码、固定权重目录
 ├── src/eight_ball_devtool/
 │   ├── ui.py                     # Tkinter 原生界面，只做交互与展示
 │   ├── models.py                 # 帧、球位、路径、结果数据契约
 │   ├── config.py                 # 参数验证和 JSON 持久化
 │   ├── acquisition/              # 采集层
 │   │   ├── __init__.py
-│   │   ├── sources.py            # 已有示例帧、图片帧
+│   │   ├── sources.py            # 采集源协议与示例帧
 │   │   ├── camera.py             # 摄像头采集（空文件）
 │   │   ├── screen.py             # 屏幕采集（空文件）
-│   │   ├── image.py              # 图像采集扩展（空文件）
+│   │   ├── image.py              # 真实图片解码、RGB 快照与图像 ID
 │   │   └── depth.py              # 深度 / 3D 采集（空文件）
 │   ├── perception/               # 感知层
 │   │   ├── __init__.py
 │   │   ├── detector.py           # 已有检测器协议与示例检测器
-│   │   ├── yolo.py               # YOLO 检测（空文件）
+│   │   ├── opencv.py             # 真实图像圆形候选，不猜测球号
+│   │   ├── yolo.py               # 17 类 YOLO 检测与权重类别检查
 │   │   ├── ball_classifier.py    # 球号分类（空文件）
 │   │   └── calibration.py        # OpenCV 标定（空文件）
 │   ├── coordinates/              # 坐标层
@@ -82,14 +84,51 @@ eight-ball-devtool/
 │       ├── desktop.py            # 电脑终端输出扩展（空文件）
 │       ├── mobile.py             # 手机终端（空文件）
 │       └── glasses.py            # 眼镜终端（空文件）
-├── tests/test_pipeline.py        # 标准库 unittest
+├── tests/                        # 流水线与图片采集集成测试
 ├── runtime/                      # 运行生成的本地配置（不入库）
 └── reference/web-prototype/       # 之前网页原型，仅保留视觉参考
 ```
 
 后续采集、YOLO、分类器、OpenCV、物理引擎、SLAM 与终端通信的实现都放在此项目，不需要转移到其他目录。
 
-七层均为 Python 包，`__init__.py` 保留原有公开导入方式；已有逻辑移动到对应实现文件，新增扩展文件暂为空。原生桌面 UI 仍在 `ui.py`，共享配置与数据模型仍在 `config.py` 和 `models.py`。
+七层均为 Python 包，`__init__.py` 保留公开导入方式；未接入的扩展文件暂为空。原生桌面 UI 仍在 `ui.py`，共享配置与数据模型仍在 `config.py` 和 `models.py`。
+
+## 图片采集与后续逻辑
+
+1. 启动后点击“导入图片”，选择本地图片。文件在本机解码，不上传服务器；导入成功后，`Controller.source` 从 `DemoSource` 切换为 `ImageSource`，旧球位和路线立即清除。解码或读取失败会保留原输入。
+2. OpenCV 在真实像素上生成圆形候选，全部标为未知球号。检测存在误检与漏检，仅用于链路调试；没有 OpenCV 时也能通过 Pillow 导入图片并手动添加球位。
+3. 点击“四点标定”，按**左上、右上、右下、左下**点选库边内沿所围台面的四角。标定前不生成毫米球位或路线。Esc 取消本轮选点。
+4. 在采集画面中右键候选球，确认母球（0）和目标球号。右键空白处可补加球位，右键候选可移除误检。球号只由人工确认；未知球仅作障碍物。台面范围外的候选不进入物理计算。
+5. 切换“数字球桌”，查看同一张图片转换后的球位和可行路线。目标组和最大切球角仍由计算层配置控制。当前使用理想六袋位置，不代表已识别实际袋口。
+6. 点击“示例”恢复示例输入。3D 模式可对标定后的图像球位进行手动空间配准；原有 2D 融合旁路约束保持生效。
+
+图片被解码为带路径、尺寸、RGB 字节和图像 ID 的不可变 `Frame`；预览和感知使用同一快照，不在周期计算时重复读取原文件。图片解码与候选检测在工作线程执行，候选按图片缓存；手动球号与候选编辑保存在当前会话中，重新导入时重新生成候选。四点标定和图像 ID 保存至配置，只有相同文件内容才复用；换图或旧配置没有绑定图像 ID 时要求重新标定。
+
+也可直接用图片启动：
+
+```powershell
+python main.py --image "D:\images\台球.png"
+python main.py --check --image "D:\images\台球.png"
+```
+
+`--check` 输出 `needs_calibration` 表示图片已接入、正在等待四点标定，并非回退到示例输入。
+
+后续 YOLO 检测器实现 `Detector.detect(frame)` 即可接入 `Controller(image_detector=...)`，返回原图像素坐标下的 `Detection`。感知层不依赖 Tkinter；`Result.detections` 供原图叠加，`Result.balls/shots` 供数字球桌与计算结果显示。
+
+## YOLO 训练与固定模型路径
+
+训练工具和完整标注指南见 [yolo/README.md](yolo/README.md)。类别固定为 `0=cue_ball`、`1–15=ball_1…ball_15`、`16=pocket`，六个球洞标为同一类的多个实例。模型放在 `yolo/checkpoints/yolo-eight-ball.pt`；初始化权重在 `yolo/checkpoints/pretrained/`，每次训练的 best.pt / last.pt 在 `yolo/runs/`。
+
+```powershell
+python yolo/download_pretrained.py
+python yolo/check_dataset.py
+python yolo/train.py --device 0
+python yolo/validate.py --weights yolo/runs/eight-ball/weights/best.pt --device 0
+python yolo/promote.py --weights yolo/runs/eight-ball/weights/best.pt
+python main.py --detector yolo
+```
+
+先安装 YOLO 依赖并填入标注数据再执行。下载初始化权重是显式步骤，训练完成后先验证再发布；本次没有下载或训练模型。YOLO 检测球洞会以独立类型显示，不进入台球障碍物计算，当前还未替换理想袋口规划。
 
 ## 283 × 155 × 84 cm 球桌规格
 
@@ -129,14 +168,14 @@ python main.py --config configs/chinese-eight-ball.json
 - 幽灵球瞄准与六袋直线规划：排除障碍球、不可达碰撞点、过大切球角，排序前三条可行路线。
 - 球组筛选；未知球只作为障碍物，不作为击打目标。
 - Canvas 球位 / 路径 / 网格显示，球位点击查看坐标，3D 透视示意。
-- 图片预览、左上 → 右上 → 右下 → 左下四点标定，求解矩阵并保存归一化点。新图片清除旧图的标定点。
+- 图片采集 → 圆形候选 / 人工球号确认 → 四点坐标变换 → 直线规划 → 数字球桌渲染，换图自动清除不匹配的标定和旧结果。
 - 配置验证、原子写入本项目 `runtime/config.json`、JSON 导出。可用 `python main.py --config 路径` 指定配置。
 
 ## 待接入
 
-真实摄像头、屏幕和深度采集；YOLO 模型与球号分类；OpenCV 相机畸变校正；库边反弹、旋转和速度仿真；SLAM 定位；真实 3D / AR 渲染；手机 / 眼镜通信。
+真实摄像头、屏幕和深度采集；真实台球数据采集、YOLO 训练及逐类精度验证；OpenCV 相机畸变校正；真实袋口配准；库边反弹、旋转和速度仿真；SLAM 定位；真实 3D / AR 渲染；手机 / 眼镜通信。
 
-图片当前仅用于预览和标定，不会将示例检测结果冒充为真实识别结果。数字球桌使用固定示例输入；路线和耗时则由 Python 实时计算。3D 融合当前是手动配准，不是 SLAM。手机 / 眼镜仅是保留的输出配置项。
+示例模式和真实图片模式独立。默认真实图片候选来自 OpenCV 或人工添加，不使用示例球位；显式选择 `--detector yolo` 并提供合格权重后，球号和球洞由模型预测，可人工修正。3D 融合当前是手动配准，不是 SLAM。手机 / 眼镜仅是保留的输出配置项。
 
 ## 检查
 
@@ -145,4 +184,4 @@ python main.py --check
 python -m unittest discover -s tests -v
 ```
 
-所有基础检查和界面均无需第三方包；可选的 `vision` 依赖组为下一阶段接入 OpenCV 预留，安装它不会自动启用尚未实现的识别器。
+示例模式与几何测试无需第三方包；图片采集测试需要 Pillow 或 OpenCV，候选检测测试需要 OpenCV，数据集检查测试需要 PyYAML，未安装时对应测试会明确跳过。YOLO 接口测试使用模拟模型，不代表已经进行了真实训练或推理精度验证。
