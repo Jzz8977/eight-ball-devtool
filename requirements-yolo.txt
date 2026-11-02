@@ -1,0 +1,3 @@
+# Optional future YOLO integration; not required to start the desktop UI.
+# Model weights and a real detector adapter are still required.
+-e .[yolo]

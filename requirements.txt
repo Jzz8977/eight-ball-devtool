@@ -1,0 +1,4 @@
+# Install this Python project and its image / OpenCV development dependencies.
+# Tkinter ships with the Python distribution; it is not a pip package.
+# Run from this directory: python -m pip install -r requirements.txt
+-e .[vision]

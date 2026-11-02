@@ -1,0 +1,7 @@
+{
+  "name": "eight-ball-devtool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Eight Ball 分层架构与可视化调试工作台",
+  "scripts": { "dev": "node server.mjs", "start": "node server.mjs", "check": "node --check app.js && node --check server.mjs" }
+}

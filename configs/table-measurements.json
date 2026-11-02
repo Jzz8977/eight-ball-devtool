@@ -1,0 +1,23 @@
+{
+  "units": "mm",
+  "reported_dimensions": {
+    "length": 2830,
+    "width": 1550,
+    "height": 840,
+    "length_width_reference": "overall dimensions, inferred from matching published specifications",
+    "height_reference": "overall height; not the measured cloth-plane elevation",
+    "source": "user-provided: 283 cm x 155 cm x 84 cm"
+  },
+  "playing_surface": {
+    "length": 2540,
+    "width": 1270,
+    "reference": "between cushion noses",
+    "status": "nominal reference for this specification, not individually measured"
+  },
+  "cloth_height_above_floor": null,
+  "sources": [
+    "https://www.xingpaibilliard.com/tqzcc/2020/12/01/11872.html",
+    "https://uaegamer.com/products/9-6-billiard-table-2830-x-1550-x-840mm"
+  ],
+  "note": "Specification record, not a runtime Config. Use chinese-eight-ball.json for the runtime profile. Actual cloth-plane height remains unknown."
+}
